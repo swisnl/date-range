@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['9.*', '10.*', '11.*', '12.*']
+        carbon: ['^2.71', '^3.0']
+        stability: [prefer-lowest, prefer-stable]
+        exclude:
+          - laravel: 9.*
+            php: '8.3'
+          - laravel: 9.*
+            php: '8.4'
+          - laravel: 10.*
+            php: '8.4'
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - C${{ matrix.carbon }} - ${{ matrix.stability }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          coverage: none
+
+      - name: Setup problem matchers
+        run: |
+          echo "::add-matcher::${{ runner.tool_cache }}/php.json"
+          echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+      - name: Install dependencies
+        run: |
+          composer require "nesbot/carbon:${{ matrix.carbon }}" "illuminate/collections:${{ matrix.laravel}}" "illuminate/contracts:${{ matrix.laravel}}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+      - name: List Installed Dependencies
+        run: composer show -D
+
+      - name: Execute tests
+        run: vendor/bin/pest --ci
