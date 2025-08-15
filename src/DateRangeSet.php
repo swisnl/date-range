@@ -3,15 +3,30 @@
 namespace Swis\DateRange;
 
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 /**
+ * DateRangeSet is a collection of DateRange objects.
+ *
+ * It keeps the date ranges in order and merges overlapping date ranges, so we
+ * can easily find the range that a date falls into. That also means that only
+ * the first range can have a null start date, and only the last range can have
+ * a null end date.
+ *
  * @implements Arrayable<int, array<int, string|null>>
  */
 class DateRangeSet implements Arrayable
 {
     /**
+     * Creates a new DateRangeSet instance from a collection of DateRange
+     * objects.
+     *
+     * This constructor is protected, use the `make` method to create a new
+     * instance.
+     *
      * @param  Collection<int, DateRange>  $dateRanges
      */
     protected function __construct(
@@ -19,22 +34,40 @@ class DateRangeSet implements Arrayable
     ) {}
 
     /**
-     * @param  Arrayable<array-key, DateRange>|iterable<array-key, DateRange>|DateRange|null  $ranges
+     * Make a new DateRangeSet instance.
+     *
+     * This method accepts an array (or collection) of date ranges (where each
+     * can either be a DateRange object or an array that can be converted to a
+     * DateRange object), a single DateRange object, or null.
+     *
+     * @param  Arrayable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|iterable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|DateRange|null  $ranges
+     *
+     * @throws InvalidArgumentException if the input is invalid.
      */
     public static function make(Arrayable|iterable|DateRange|null $ranges = []): self
     {
-        // We want to keep the date ranges in order, so we can easily find the range that a date falls into. Also, we
-        // want to make sure that there are no overlapping ranges. This also means that only the first range can have a
-        // null start date, and only the last range can have a null end date.
+        // To keep the order of the date ranges, we start with an empty set and add each range one by one.
 
         if ($ranges instanceof DateRange) {
             $ranges = collect([$ranges]);
         }
 
-        $ranges = collect($ranges);
+        /** @var Collection<int, DateRange> $ranges */
+        $ranges = collect($ranges)->map(function (mixed $range): DateRange {
+            if ($range instanceof DateRange) {
+                return $range;
+            }
+
+            // @phpstan-ignore-next-line
+            if (is_array($range)) {
+                return DateRange::fromArray($range);
+            }
+
+            // @phpstan-ignore-next-line
+            throw new InvalidArgumentException('Invalid date range provided. Expected DateRange object or array.');
+        });
 
         $set = new self(collect());
-        /** @var Collection<int, DateRange> $ranges */
         foreach ($ranges as $range) {
             $set = $set->addDateRange($range);
         }
@@ -43,21 +76,34 @@ class DateRangeSet implements Arrayable
     }
 
     /**
+     * Make a new DateRangeSet instance from an array of date ranges.
+     *
+     * @param  array<array-key, array<int, string|DateTimeInterface|null>|DateRange>  $array
+     *                                                                                        Array of date ranges, where each date range can be an array that is
+     *                                                                                        accepted by DateRange::fromArray or a DateRange object.
+     */
+    public static function fromArray(array $array): self
+    {
+        return self::make($array);
+    }
+
+    /**
+     * Convert the DateRangeSet to an array of date ranges arrays.
+     *
      * @return array<int, array<int, string|null>>
      */
-    public function toArray()
+    public function toArray(): array
     {
         return $this->dateRanges->map(fn (DateRange $range) => $range->toArray())->all();
     }
 
     /**
-     * @param  array<array-key, array<int, string|null>>  $array
+     * Add a date range to the set.
+     *
+     * This method will merge overlapping or touching date ranges and keep the
+     * set ordered. It returns a new DateRangeSet instance with the updated
+     * ranges.
      */
-    public static function fromArray(array $array): self
-    {
-        return self::make(collect($array)->map(fn (array $range) => DateRange::fromArray($range))->all());
-    }
-
     public function addDateRange(DateRange $dateRange): self
     {
         // We split all the ranges in two parts: the ones that start before the new range and the ones that start after
@@ -130,6 +176,14 @@ class DateRangeSet implements Arrayable
         return new self($before->concat([$dateRange])->concat($after->all()));
     }
 
+    /**
+     * Add a DateRangeSet to the current set.
+     *
+     * This method will add all date ranges from the given DateRangeSet to the
+     * current set, merging overlapping or touching date ranges and keeping the
+     * set ordered. It returns a new DateRangeSet instance with the updated
+     * ranges.
+     */
     public function add(DateRangeSet $dateRangeSet): self
     {
         $result = $this;
@@ -140,6 +194,13 @@ class DateRangeSet implements Arrayable
         return $result;
     }
 
+    /**
+     * Subtract a DateRange from the set.
+     *
+     * This method will remove the given date range from the set, splitting
+     * existing date ranges that overlap with the given range if necessary. It
+     * returns a new DateRangeSet instance with the updated ranges.
+     */
     public function subtractDateRange(DateRange $dateRange): self
     {
         // We split all the ranges in two parts: the ones that start before the range to remove and the ones that start
@@ -178,6 +239,14 @@ class DateRangeSet implements Arrayable
         return new self($before->concat($insert->all())->concat($after->all()));
     }
 
+    /**
+     * Subtract a DateRangeSet from the current set.
+     *
+     * This method will subtract all date ranges from the given DateRangeSet
+     * from the current set, splitting existing date ranges that overlap with
+     * the given ranges if necessary. It returns a new DateRangeSet instance
+     * with the updated ranges.
+     */
     public function subtract(DateRangeSet $dateRangeSet): self
     {
         $result = $this;
@@ -188,6 +257,17 @@ class DateRangeSet implements Arrayable
         return $result;
     }
 
+    /**
+     * Intersect the current set with another DateRangeSet.
+     *
+     * This method will return a new DateRangeSet instance containing the
+     * intersection of the current set and the given DateRangeSet. It will
+     * return an empty set if there are no overlapping ranges.
+     *
+     * Performance-wise, this is not the most efficient implementation, as it
+     * iterates over all ranges in both sets and checks for intersections. Be
+     * aware that this can be slow if the sets are large.
+     */
     public function intersect(DateRangeSet $dateRangeSet): self
     {
         $result = new self(collect());
@@ -207,6 +287,8 @@ class DateRangeSet implements Arrayable
     }
 
     /**
+     * Get the date ranges in the set.
+     *
      * @return Collection<int, DateRange>
      */
     public function getDateRanges(): Collection
@@ -214,23 +296,43 @@ class DateRangeSet implements Arrayable
         return $this->dateRanges->values();
     }
 
-    public function inRange(CarbonImmutable $date): bool
+    /**
+     * Check if the set contains the given date.
+     */
+    public function inRange(DateTimeInterface|string $date): bool
     {
         return $this->dateRanges->contains(fn (DateRange $range) => $range->inRange($date));
     }
 
+    /**
+     * Check if the set is empty.
+     */
     public function isEmpty(): bool
     {
         return $this->dateRanges->isEmpty();
     }
 
+    /**
+     * Check if the set is not empty.
+     *
+     * This is a convenience method that returns the opposite of `isEmpty()`.
+     */
     public function isNotEmpty(): bool
     {
         return ! $this->isEmpty();
     }
 
     /**
+     * Convert the set to a collection of CarbonImmutable dates.
+     *
+     * This method generates a collection of dates that fall within the date
+     * range set, including both the start and end dates. If the date range set
+     * is not closed (i.e., the first range doesn't have a start date or the
+     * last range doesn't have an end date), it will throw an exception.
+     *
      * @return Collection<int, CarbonImmutable>
+     *
+     * @throws InvalidArgumentException if the date range set is not closed.
      */
     public function toDates(): Collection
     {

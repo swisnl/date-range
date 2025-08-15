@@ -3,27 +3,57 @@
 namespace Swis\DateRange;
 
 use Carbon\CarbonImmutable;
+use Carbon\Exceptions\InvalidFormatException;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 /**
+ * DateRange represents a range of dates, with optional start and end dates.
+ *
  * @implements Arrayable<int, string|null>
  */
 class DateRange implements Arrayable
 {
+    /**
+     * Create a new DateRange instance from CarbonImmutable instances.
+     *
+     * This constructor is protected, use the `make` method to create a new
+     * instance.
+     */
     protected function __construct(
         protected ?CarbonImmutable $startDate = null,
         protected ?CarbonImmutable $endDate = null,
     ) {}
 
+    /**
+     * Make a new DateRange instance.
+     *
+     * This method allows you to create a DateRange instance with optional start
+     * and end dates. The dates can be provided as DateTimeInterface instances
+     * (that includes PHP's DateTime and DateTimeImmutable, and the classes from
+     * Carbon), or strings that can be parsed by Carbon.
+     *
+     *
+     * @throws InvalidArgumentException if the end date is before the start date
+     *                                  or if the date format is invalid.
+     */
     public static function make(
         DateTimeInterface|string|null $startDate = null,
         DateTimeInterface|string|null $endDate = null,
     ): self {
-        $startDate = $startDate ? CarbonImmutable::parse($startDate)->startOfDay() : null;
-        $endDate = $endDate ? CarbonImmutable::parse($endDate)->startOfDay() : null;
+        try {
+            $startDate = $startDate ? CarbonImmutable::parse($startDate)->startOfDay() : null;
+        } catch (InvalidFormatException $e) {
+            throw new InvalidArgumentException('Invalid start date format: '.$e->getMessage(), 0, $e);
+        }
+
+        try {
+            $endDate = $endDate ? CarbonImmutable::parse($endDate)->startOfDay() : null;
+        } catch (InvalidFormatException $e) {
+            throw new InvalidArgumentException('Invalid end date format: '.$e->getMessage(), 0, $e);
+        }
 
         if ($startDate && $endDate && $endDate->lessThan($startDate)) {
             throw new InvalidArgumentException('End date must be after start date');
@@ -32,6 +62,9 @@ class DateRange implements Arrayable
         return new self($startDate, $endDate);
     }
 
+    /**
+     * Make new DateRange instance that covers a specific year.
+     */
     public static function year(int $year): self
     {
         return self::make(
@@ -40,33 +73,14 @@ class DateRange implements Arrayable
         );
     }
 
-    public function clone(): self
-    {
-        return self::make(
-            $this->getStartDate()?->clone(),
-            $this->getEndDate()?->clone()
-        );
-    }
-
     /**
-     * @return array<int, string|null>
+     * Make new DateRange instance that covers a specific month.
+     *
+     * @param  string|null  $month  The month in 'Y-m' format, e.g. '2023-10'. If
+     *                              null, the current month is used.
+     *
+     * @throws InvalidArgumentException if the month string is invalid.
      */
-    public function toArray(): array
-    {
-        return [$this->getStartDate()?->toDateString(), $this->getEndDate()?->toDateString()];
-    }
-
-    /**
-     * @param  array<int, string|null>  $array
-     */
-    public static function fromArray(array $array): self
-    {
-        return self::make(
-            $array[0] ?: null,
-            $array[1] ?: null
-        );
-    }
-
     public static function fromMonthString(?string $month = null): DateRange
     {
         if ($month) {
@@ -84,54 +98,170 @@ class DateRange implements Arrayable
         );
     }
 
+    /**
+     * Make a new DateRange instance from an array.
+     *
+     * This method expects an array with two elements, where the first element
+     * is the start date and the second element is the end date. If an element
+     * is null or an empty string, it will be treated as a null value. The dates
+     * can be provided as strings that can be parsed by Carbon.
+     *
+     * @param  array<int, string|DateTimeInterface|null>  $array
+     *
+     * @throws InvalidArgumentException if the end date is before the start date
+     *                                  or if the date format is invalid.
+     */
+    public static function fromArray(array $array): self
+    {
+        return self::make(
+            $array[0] ?: null,
+            $array[1] ?: null
+        );
+    }
+
+    /**
+     * Clone the DateRange instance.
+     *
+     * This method creates a new DateRange instance with cloned start and end
+     * dates.
+     */
+    public function clone(): self
+    {
+        return self::make(
+            $this->getStartDate()?->clone(),
+            $this->getEndDate()?->clone()
+        );
+    }
+
+    /**
+     * Convert the DateRange instance to an array.
+     *
+     * This method returns an array with two elements: the start date and the
+     * end date, both formatted as strings in 'Y-m-d' format. If a date is null,
+     * it will be represented as null in the array. This array representation
+     * can be converted back to a DateRange instance using the `fromArray`
+     * method.
+     *
+     * @return array<int, string|null>
+     */
+    public function toArray(): array
+    {
+        return [$this->getStartDate()?->toDateString(), $this->getEndDate()?->toDateString()];
+    }
+
+    /**
+     * Get the start date of the date range.
+     */
     public function getStartDate(): ?CarbonImmutable
     {
         return $this->startDate;
     }
 
+    /**
+     * Get the end date of the date range.
+     */
     public function getEndDate(): ?CarbonImmutable
     {
         return $this->endDate;
     }
 
-    public function setStartDate(?DateTimeInterface $startDate): self
+    /**
+     * Set the start date of the date range.
+     *
+     * This method returns a new DateRange instance with the specified start
+     * date and the current end date.
+     *
+     *
+     * @throws InvalidArgumentException if the start date is after the end date or if the date format is invalid.
+     */
+    public function setStartDate(DateTimeInterface|string|null $startDate): self
     {
         return self::make($startDate, $this->getEndDate());
     }
 
-    public function setEndDate(?DateTimeInterface $endDate): self
+    /**
+     * Set the end date of the date range.
+     *
+     * This method returns a new DateRange instance with the specified end date
+     * and the current start date.
+     *
+     *
+     * @throws InvalidArgumentException if the end date is before the start date or if the date format is invalid.
+     */
+    public function setEndDate(DateTimeInterface|string|null $endDate): self
     {
         return self::make($this->getStartDate(), $endDate);
     }
 
+    /**
+     * Check if the date range has a start date.
+     *
+     * This method returns true if the start date is set, false otherwise.
+     */
     public function hasStartDate(): bool
     {
         return (bool) $this->getStartDate();
     }
 
+    /**
+     * Check if the date range has an end date.
+     *
+     * This method returns true if the end date is set, false otherwise.
+     */
     public function hasEndDate(): bool
     {
         return (bool) $this->getEndDate();
     }
 
+    /**
+     * Check if the date range is closed (has both start and end dates).
+     *
+     * This method returns true if both start and end dates are set, false
+     * otherwise.
+     */
     public function isClosed(): bool
     {
         return $this->hasStartDate() && $this->hasEndDate();
     }
 
+    /**
+     * Check if the date range is half-open (has either a start or an end date,
+     * but not both).
+     *
+     * This method returns true if one of the dates is set and the other is not,
+     * false otherwise.
+     */
     public function isHalfOpen(): bool
     {
         return $this->hasStartDate() xor $this->hasEndDate();
     }
 
+    /**
+     * Check if the date range is open (has no start and no end date).
+     *
+     * This method returns true if both start and end dates are not set, false
+     * otherwise.
+     */
     public function isOpen(): bool
     {
         return ! $this->hasStartDate() && ! $this->hasEndDate();
     }
 
-    public function inRange(DateTimeInterface $date): bool
+    /**
+     * Check if the date range includes a specific date.
+     *
+     * This method checks if the given date falls within the date range, taking
+     * into account whether the start and end dates are set. If the date range
+     * is open (no start and no end date), it always includes any specific date.
+     *
+     * @param  DateTimeInterface|string  $date  The date to check.
+     * @return bool True if the date is included in the range, false otherwise.
+     *
+     * @throws InvalidArgumentException if the date format is invalid.
+     */
+    public function inRange(DateTimeInterface|string $date): bool
     {
-        $date = CarbonImmutable::instance($date)->startOfDay();
+        $date = CarbonImmutable::parse($date)->startOfDay();
 
         if (! $this->getStartDate()) {
             if (! $this->getEndDate()) {
@@ -155,6 +285,15 @@ class DateRange implements Arrayable
         return $date->betweenIncluded($this->getStartDate(), $this->getEndDate());
     }
 
+    /**
+     * Check if this date range overlaps with another date range.
+     *
+     * This method checks if the two date ranges overlap, taking into account
+     * whether they are open, half-open, or closed.
+     *
+     * @param  self  $dateRange  The other date range to check for overlap.
+     * @return bool True if the ranges overlap, false otherwise.
+     */
     public function overlaps(self $dateRange): bool
     {
         if (! $this->getStartDate()) {
@@ -207,6 +346,16 @@ class DateRange implements Arrayable
             && $this->getEndDate()->greaterThanOrEqualTo($dateRange->getStartDate());
     }
 
+    /**
+     * Get the intersection of this date range with another date range.
+     *
+     * This method returns a new DateRange instance that represents the overlap
+     * between the two date ranges. If there is no overlap, it returns null.
+     *
+     * @param  self  $dateRange  The other date range to intersect with.
+     * @return self|null The intersection of the two date ranges, or null if
+     *                   there is no overlap.
+     */
     public function intersect(self $dateRange): ?self
     {
         if (! $this->getStartDate()) {
@@ -256,6 +405,17 @@ class DateRange implements Arrayable
         return new self($startDate, $endDate);
     }
 
+    /**
+     * Subtract another date range from this date range.
+     *
+     * This method returns a DateRangeSet containing the parts of this date
+     * range that do not overlap with the given date range. If there is no
+     * overlap, it returns a DateRangeSet containing this date range. The
+     * DataRangeSet can contain zero, one, or two date ranges.
+     *
+     * @param  DateRange  $dateRange  The date range to subtract.
+     * @return DateRangeSet The resulting set of date ranges after subtraction.
+     */
     public function subtract(DateRange $dateRange): DateRangeSet
     {
         $intersection = $this->intersect($dateRange);
@@ -294,6 +454,14 @@ class DateRange implements Arrayable
         return DateRangeSet::make(array_filter([$before, $after]));
     }
 
+    /**
+     * Check if this date range is equal to another date range.
+     *
+     * This method checks if both the start and end dates of the two date ranges
+     * are equal. If both dates are null, the ranges are considered equal.
+     *
+     * @param  self  $dateRange  The other date range to compare with.
+     */
     public function equals(self $dateRange): bool
     {
         return
@@ -302,12 +470,21 @@ class DateRange implements Arrayable
     }
 
     /**
+     * Convert the date range to a collection of CarbonImmutable dates.
+     *
+     * This method generates a collection of dates that fall within the date
+     * range, including both the start and end dates. If the date range is not
+     * closed (i.e., it does not have both a start and an end date), it will
+     * throw an exception.
+     *
      * @return Collection<int, CarbonImmutable>
+     *
+     * @throws InvalidArgumentException if the date range is not closed.
      */
     public function toDates(): Collection
     {
         if (! $this->getStartDate() || ! $this->getEndDate()) {
-            throw new InvalidArgumentException('Date range is not fully defined');
+            throw new InvalidArgumentException('Date range is not closed.');
         }
 
         $dates = [];
@@ -320,10 +497,21 @@ class DateRange implements Arrayable
         return collect($dates);
     }
 
+    /**
+     * Get the length of the date range in days.
+     *
+     * This method calculates the number of days in the date range, including
+     * both the start and end dates. If the date range is not closed (i.e., it
+     * does not have both a start and an end date), it will throw an exception.
+     *
+     * @return int The length of the date range in days.
+     *
+     * @throws InvalidArgumentException if the date range is not closed.
+     */
     public function lengthInDays(): int
     {
         if (! $this->getStartDate() || ! $this->getEndDate()) {
-            throw new InvalidArgumentException('Date range is not fully defined');
+            throw new InvalidArgumentException('Date range is not closed.');
         }
 
         return ((int) $this->getStartDate()->diffInDays($this->getEndDate())) + 1;
