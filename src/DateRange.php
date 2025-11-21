@@ -562,40 +562,17 @@ class DateRange implements Arrayable
      */
     public function subtract(DateRange $dateRange): DateRangeSet
     {
-        $intersection = $this->intersect($dateRange);
+        [
+            'before' => $before,
+            'before_from_this' => $beforeFromThis,
+            'after' => $after,
+            'after_from_this' => $afterFromThis,
+        ] = $this->compare($dateRange);
 
-        if (! $intersection) {
-            return DateRangeSet::make([$this]);
-        }
-
-        $before = null;
-        $after = null;
-        if (! $this->getStartDate()) {
-            if ($intersection->getStartDate()) {
-                // If the intersection has a start date, we keep the range before the intersection.
-                $before = new self(null, $intersection->getStartDate()->subDay());
-            }
-        } else {
-            // If this range has a start date, the intersection must have a start date as well.
-            if ($this->getStartDate() < $intersection->getStartDate()) {
-                $before = new self($this->getStartDate(), $intersection->getStartDate()->subDay());
-            }
-        }
-
-        if (! $this->getEndDate()) {
-            if ($intersection->getEndDate()) {
-                // If the intersection has an end date, we keep the range after the intersection.
-                $after = new self($intersection->getEndDate()->addDay(), null);
-            }
-        } else {
-            // If this range has an end date, the intersection must have an end date as well.
-            if ($this->getEndDate() > $intersection->getEndDate()) {
-                // @phpstan-ignore-next-line
-                $after = new self($intersection->getEndDate()->addDay(), $this->getEndDate());
-            }
-        }
-
-        return DateRangeSet::make(array_filter([$before, $after]));
+        return DateRangeSet::make(array_filter([
+            $beforeFromThis ? $before : null,
+            $afterFromThis ? $after : null,
+        ]));
     }
 
     /**
