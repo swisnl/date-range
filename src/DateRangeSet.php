@@ -263,27 +263,49 @@ class DateRangeSet implements Arrayable
      * This method will return a new DateRangeSet instance containing the
      * intersection of the current set and the given DateRangeSet. It will
      * return an empty set if there are no overlapping ranges.
-     *
-     * Performance-wise, this is not the most efficient implementation, as it
-     * iterates over all ranges in both sets and checks for intersections. Be
-     * aware that this can be slow if the sets are large.
      */
     public function intersect(DateRangeSet $dateRangeSet): self
     {
-        $result = new self(collect());
+        $result = collect();
 
-        // There is probably a more efficient way to do this (because both sets are ordered), but this is the easiest
-        // way to implement it. Since usually there are only a few ranges in a set, this should be fine for now.
-        foreach ($dateRangeSet->getDateRanges() as $dateRange) {
-            foreach ($this->getDateRanges() as $range) {
-                $intersection = $range->intersect($dateRange);
-                if ($intersection) {
-                    $result = $result->addDateRange($intersection);
+        $thisRanges = $this->getDateRanges();
+        $otherRanges = $dateRangeSet->getDateRanges();
+
+        // Start with the first range in both sets.
+        $thisRange = $thisRanges->shift();
+        $otherRange = $otherRanges->shift();
+
+        // Loop until we reach the end of either set.
+        while ($thisRange && $otherRange) {
+            [
+                'intersection' => $intersection,
+                'after' => $after,
+                'after_from_this' => $afterFromThis,
+            ] = $thisRange->compare($otherRange);
+
+            if ($intersection) {
+                $result = $result->push($intersection);
+            }
+
+            // If there is an after range, we need to determine which set it comes from, so we can continue the loop
+            // with the correct ranges.
+            if ($after) {
+                // If the after range comes from this set, we need to consider the potential overlap of the after with
+                // the next range in the other set. If it comes from the other set, the same applies vice versa.
+                if ($afterFromThis) {
+                    $thisRange = $after;
+                    $otherRange = $otherRanges->shift();
+                } else {
+                    $otherRange = $after;
+                    $thisRange = $thisRanges->shift();
                 }
+            } else {
+                $thisRange = $thisRanges->shift();
+                $otherRange = $otherRanges->shift();
             }
         }
 
-        return $result;
+        return new self($result);
     }
 
     /**

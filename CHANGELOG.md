@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-* Nothing
+* Add `DateRange::compare()` method to compare two date ranges.
+* Improve performance of `DateRangeSet::intersect()` method.
 
 ## [1.0.0] - 2025-08-15
 

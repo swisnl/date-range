@@ -347,6 +347,155 @@ class DateRange implements Arrayable
     }
 
     /**
+     * Compare this date range and another date range.
+     *
+     * This method compares two date ranges and returns an array containing the
+     * following keys:
+     * - 'before': A DateRange representing the part of one of the ranges that
+     *   is before the intersection, or null if there is no such part.
+     * - 'before_from_this': A boolean indicating whether the 'before' range
+     *   belongs to this date range (true) or the other date range (false) or
+     *   null if there is no 'before' range.
+     * - 'intersection': A DateRange representing the intersection of the two
+     *   ranges, or null if there is no intersection.
+     * - 'after': A DateRange representing the part of one of the ranges that is
+     *   after the intersection, or null if there is no such part.
+     * - 'after_from_this': A boolean indicating whether the 'after' range
+     *   belongs to this date range (true) or the other date range (false) or
+     *   null if there is no 'after' range.
+     *
+     * This method is most useful with array destructuring to easily access the
+     * parts of the comparison result that you need. Look at
+     * DateRange::subtract() and DateRangeSet::intersect() for examples of how
+     * to use this method.
+     *
+     * This operation is mostly symmetric, so comparing A with B yields the same
+     * result as comparing B with A, except for the before_from_this and
+     * before_from_this flags (they are inverted).
+     *
+     * @param  DateRange  $dateRange  The other date range to compare with.
+     * @return array{
+     *     before: ?DateRange,
+     *     before_from_this: ?bool,
+     *     intersection: ?DateRange,
+     *     after: ?DateRange,
+     *     after_from_this: ?bool
+     * } The comparison result.
+     */
+    public function compare(self $dateRange): array
+    {
+        if (! $this->getStartDate()) {
+            if (! $dateRange->getStartDate()) {
+                // Both ranges are open at the start, so the intersection is open at the start. That means there is no
+                // 'before' range. This also means that there will definitely be an intersection and the order between
+                // the two ranges does not matter.
+                $startDate = null;
+                $before = null;
+                $startDateOrder = 0;
+            } else {
+                // This range is open at the start, and the other range has a start date, so the intersection starts at
+                // the start date of the other range. The 'before' range is from open to the day before the start date.
+                // This range starts before the other range, so we keep track of the order.
+                $startDate = $dateRange->getStartDate();
+                $before = new self(null, $startDate->subDay()->startOfDay());
+                $startDateOrder = -1;
+            }
+        } else {
+            if (! $dateRange->getStartDate()) {
+                // This range has a start date, and the other range is open at the start, so the intersection starts at
+                // the start date of this range. The 'before' range is from open to the day before the start date. The
+                // other range starts before this range, so we keep track of the order.
+                $startDate = $this->getStartDate();
+                $before = new self(null, $startDate->subDay()->startOfDay());
+                $startDateOrder = 1;
+            } else {
+                // Both ranges have a start date, so the intersection starts at the latest of the two start dates. The
+                // 'before' range is from the earliest start date to the day before the intersection start date. We keep
+                // track the order based on which range has the earlier start date.
+                $startDateOrder = $this->getStartDate() <=> $dateRange->getStartDate();
+                if ($startDateOrder < 0) {
+                    $startDate = $dateRange->getStartDate();
+                    $before = new self($this->getStartDate(), $startDate->subDay()->startOfDay());
+                } elseif ($startDateOrder > 0) {
+                    $startDate = $this->getStartDate();
+                    $before = new self($dateRange->getStartDate(), $startDate->subDay()->startOfDay());
+                } else {
+                    $startDate = $this->getStartDate();
+                    $before = null;
+                }
+            }
+        }
+
+        if (! $this->getEndDate()) {
+            if (! $dateRange->getEndDate()) {
+                // Both ranges are open at the end, so the intersection is open at the end. That means there is no
+                // 'after' range.
+                $endDate = null;
+                $after = null;
+                $endDateOrder = 0;
+            } else {
+                // This range is open at the end, and the other range has an end date, so the intersection ends at the
+                // end date of the other range. The 'after' range is from the day after the end date to open.
+                $endDate = $dateRange->getEndDate();
+                $after = new self($endDate->addDay()->startOfDay(), null);
+                $endDateOrder = 1;
+            }
+        } else {
+            if (! $dateRange->getEndDate()) {
+                // This range has an end date, and the other range is open at the end, so the intersection ends at the
+                // end date of this range. The 'after' range is from the day after the end date to open.
+                $endDate = $this->getEndDate();
+                $after = new self($endDate->addDay()->startOfDay(), null);
+                $endDateOrder = -1;
+            } else {
+                // Both ranges have an end date, so the intersection ends at the earliest of the two end dates. The
+                // 'after' range is from the day after the intersection end date to the latest end date.
+                $endDateOrder = $this->getEndDate() <=> $dateRange->getEndDate();
+                if ($endDateOrder < 0) {
+                    $endDate = $this->getEndDate();
+                    $after = new self($endDate->addDay()->startOfDay(), $dateRange->getEndDate());
+                } elseif ($endDateOrder > 0) {
+                    $endDate = $dateRange->getEndDate();
+                    $after = new self($endDate->addDay()->startOfDay(), $this->getEndDate());
+                } else {
+                    $endDate = $dateRange->getEndDate();
+                    $after = null;
+                }
+            }
+        }
+
+        if ($startDate && $endDate && $endDate->lessThan($startDate)) {
+            if ($startDateOrder < 0) {
+                // No intersection, this range is before the other range.
+                return [
+                    'before' => $this->clone(),
+                    'before_from_this' => true,
+                    'intersection' => null,
+                    'after' => $dateRange->clone(),
+                    'after_from_this' => false,
+                ];
+            } else {
+                // No intersection, this range is after the other range.
+                return [
+                    'before' => $dateRange->clone(),
+                    'before_from_this' => false,
+                    'intersection' => null,
+                    'after' => $this->clone(),
+                    'after_from_this' => true,
+                ];
+            }
+        }
+
+        return [
+            'before' => $before,
+            'before_from_this' => $before ? ($startDateOrder < 0) : null,
+            'intersection' => new self($startDate, $endDate),
+            'after' => $after,
+            'after_from_this' => $after ? ($endDateOrder > 0) : null,
+        ];
+    }
+
+    /**
      * Get the intersection of this date range with another date range.
      *
      * This method returns a new DateRange instance that represents the overlap
@@ -418,40 +567,17 @@ class DateRange implements Arrayable
      */
     public function subtract(DateRange $dateRange): DateRangeSet
     {
-        $intersection = $this->intersect($dateRange);
+        [
+            'before' => $before,
+            'before_from_this' => $beforeFromThis,
+            'after' => $after,
+            'after_from_this' => $afterFromThis,
+        ] = $this->compare($dateRange);
 
-        if (! $intersection) {
-            return DateRangeSet::make([$this]);
-        }
-
-        $before = null;
-        $after = null;
-        if (! $this->getStartDate()) {
-            if ($intersection->getStartDate()) {
-                // If the intersection has a start date, we keep the range before the intersection.
-                $before = new self(null, $intersection->getStartDate()->subDay());
-            }
-        } else {
-            // If this range has a start date, the intersection must have a start date as well.
-            if ($this->getStartDate() < $intersection->getStartDate()) {
-                $before = new self($this->getStartDate(), $intersection->getStartDate()->subDay());
-            }
-        }
-
-        if (! $this->getEndDate()) {
-            if ($intersection->getEndDate()) {
-                // If the intersection has an end date, we keep the range after the intersection.
-                $after = new self($intersection->getEndDate()->addDay(), null);
-            }
-        } else {
-            // If this range has an end date, the intersection must have an end date as well.
-            if ($this->getEndDate() > $intersection->getEndDate()) {
-                // @phpstan-ignore-next-line
-                $after = new self($intersection->getEndDate()->addDay(), $this->getEndDate());
-            }
-        }
-
-        return DateRangeSet::make(array_filter([$before, $after]));
+        return DateRangeSet::make(array_filter([
+            $beforeFromThis ? $before : null,
+            $afterFromThis ? $after : null,
+        ]));
     }
 
     /**
