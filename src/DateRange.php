@@ -364,6 +364,11 @@ class DateRange implements Arrayable
      *   belongs to this date range (true) or the other date range (false) or
      *   null if there is no 'after' range.
      *
+     * This method is most useful with array destructuring to easily access the
+     * parts of the comparison result that you need. Look at
+     * DateRange::subtract() and DateRangeSet::intersect() for examples of how
+     * to use this method.
+     *
      * This operation is mostly symmetric, so comparing A with B yields the same
      * result as comparing B with A, except for the before_from_this and
      * before_from_this flags (they are inverted).
