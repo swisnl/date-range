@@ -345,6 +345,29 @@ class DateRangeSet implements Arrayable
     }
 
     /**
+     * Get the smallest DateRange that covers all date ranges in the set.
+     *
+     * This method returns a DateRange that covers the entire span of the date
+     * ranges in the set. If the set is empty, it will return null.
+     */
+    public function getCoveringDateRange(): ?DateRange
+    {
+        if ($this->isEmpty()) {
+            return null;
+        }
+
+        /** @var \Swis\DateRange\DateRange $firstRange */
+        $firstRange = $this->dateRanges->first();
+        /** @var \Swis\DateRange\DateRange $lastRange */
+        $lastRange = $this->dateRanges->last();
+
+        return DateRange::make(
+            $firstRange->getStartDate(),
+            $lastRange->getEndDate(),
+        );
+    }
+
+    /**
      * Convert the set to a collection of CarbonImmutable dates.
      *
      * This method generates a collection of dates that fall within the date

@@ -297,3 +297,28 @@ it('intersects', function (array $ranges, array $intersect, array $set) {
         ],
     ],
 ]);
+
+it('gets the covering date range', function (array $ranges, ?array $coveringRange) {
+    $dateRangeSet = DateRangeSet::fromArray($ranges);
+
+    expect($dateRangeSet->getCoveringDateRange()?->toArray())->toEqual($coveringRange);
+})->with([
+    'simple' => [
+        [
+            ['2021-01-01', '2021-02-15'],
+            ['2021-03-01', '2021-03-31'],
+        ],
+        ['2021-01-01', '2021-03-31'],
+    ],
+    'with nulls' => [
+        [
+            [null, '2021-02-15'],
+            ['2021-03-01', null],
+        ],
+        [null, null],
+    ],
+    'empty set' => [
+        [],
+        null,
+    ],
+]);
