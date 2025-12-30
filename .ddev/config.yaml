@@ -2,7 +2,7 @@ name: date-range
 type: php
 docroot: ""
 php_version: "8.2"
-webserver_type: apache-fpm
+webserver_type: generic
 xdebug_enabled: false
 additional_hostnames: []
 additional_fqdns: []
