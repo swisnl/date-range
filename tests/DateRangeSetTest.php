@@ -3,6 +3,38 @@
 use Swis\DateRange\DateRange;
 use Swis\DateRange\DateRangeSet;
 
+it('creates from array', function () {
+    $dateRangeSet = DateRangeSet::make([
+        ['2021-01-01', '2021-01-31'],
+    ]);
+
+    expect($dateRangeSet->toArray())->toEqual([['2021-01-01', '2021-01-31']]);
+});
+
+it('creates from date range', function () {
+    $dateRangeSet = DateRangeSet::make(
+        DateRange::make(
+            createDate('2021-01-01'),
+            createDate('2021-01-31')
+        ),
+    );
+
+    expect($dateRangeSet->toArray())->toEqual([['2021-01-01', '2021-01-31']]);
+});
+
+it('creates from date range set', function () {
+    $dateRangeSet = DateRangeSet::make(
+        DateRange::make(
+            createDate('2021-01-01'),
+            createDate('2021-01-31')
+        ),
+    );
+
+    $dateRangeSet2 = DateRangeSet::make($dateRangeSet);
+
+    expect($dateRangeSet2->toArray())->toEqual([['2021-01-01', '2021-01-31']]);
+});
+
 it('converts to array', function () {
     $dateRangeSet = DateRangeSet::make([
         DateRange::make(
