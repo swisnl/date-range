@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 * Add `DateRangeSet::getCoveringDateRange()` method to get the minimal date 
   range covering all ranges in the set.
+* Improve efficiency of `DateRangeSet::make()` method when passing a `DateRange`
+  or `DateRangeSet` instance.
 
 ## [1.1.0] - 2025-11-21
 

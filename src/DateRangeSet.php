@@ -40,20 +40,23 @@ class DateRangeSet implements Arrayable
      * can either be a DateRange object or an array that can be converted to a
      * DateRange object), a single DateRange object, or null.
      *
-     * @param  Arrayable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|iterable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|DateRange|null  $ranges
+     * @param  Arrayable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|iterable<array-key, DateRange|array<int, string|DateTimeInterface|null>>|DateRangeSet|DateRange|null  $ranges
      *
      * @throws InvalidArgumentException if the input is invalid.
      */
     public static function make(Arrayable|iterable|DateRange|null $ranges = []): self
     {
-        // To keep the order of the date ranges, we start with an empty set and add each range one by one.
-
         if ($ranges instanceof DateRange) {
-            $ranges = collect([$ranges]);
+            return new self(collect([$ranges]));
         }
 
-        /** @var Collection<int, DateRange> $ranges */
-        $ranges = collect($ranges)->map(function (mixed $range): DateRange {
+        if ($ranges instanceof DateRangeSet) {
+            return $ranges;
+        }
+
+        // Convert the input ranges to a collection of DateRange objects.
+        /** @var Collection<int, DateRange> $processedRanges */
+        $processedRanges = collect($ranges)->map(function (mixed $range): DateRange {
             if ($range instanceof DateRange) {
                 return $range;
             }
@@ -67,8 +70,9 @@ class DateRangeSet implements Arrayable
             throw new InvalidArgumentException('Invalid date range provided. Expected DateRange object or array.');
         });
 
+        // To keep the order of the date ranges, we start with an empty set and add each range one by one.
         $set = new self(collect());
-        foreach ($ranges as $range) {
+        foreach ($processedRanges as $range) {
             $set = $set->addDateRange($range);
         }
 
