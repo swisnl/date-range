@@ -360,9 +360,9 @@ class DateRangeSet implements Arrayable
             return null;
         }
 
-        /** @var \Swis\DateRange\DateRange $firstRange */
+        /** @var DateRange $firstRange */
         $firstRange = $this->dateRanges->first();
-        /** @var \Swis\DateRange\DateRange $lastRange */
+        /** @var DateRange $lastRange */
         $lastRange = $this->dateRanges->last();
 
         return DateRange::make(
